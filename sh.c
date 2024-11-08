@@ -80,51 +80,57 @@ runcmd(struct cmd *cmd)
     break;
 
   case REDIR:
-  rcmd = (struct redircmd*)cmd;
-  int filefd;
-  if((filefd = open(rcmd->file, rcmd->mode)) < 0) {
-    panic("panic");
-  }
-  if(rcmd->fd == 0) {
-    close(0);
-    dup(filefd);
-  } else if (rcmd->fd == 1) {
-    close(1);
-    dup(filefd);
-  } 
+    rcmd = (struct redircmd*)cmd;
+    close(rcmd->fd);
+    if(open(rcmd->file, rcmd->mode) < 0) {
+      printf(2, "can't open %s\n", rcmd->file);
+      exit();
+    }
+
     runcmd(rcmd->cmd);
-    //printf(2, "Redirection Not Implemented\n");
     break;
 
   case LIST:
-    printf(2, "List Not Implemented\n");
+    lcmd = (struct listcmd*)cmd;
+    if (fork1() == 0) {
+    	runcmd(lcmd->left);
+    }
+    wait();
+    runcmd(lcmd->right);
     break;
 
   case PIPE:
     pcmd = (struct pipecmd*)cmd;
-    if(pipe(p) < 0) {
-      panic("panic");
+
+    int p[2];
+    if (pipe(p) < 0) {
+      printf(2, "pipe failed\n");
+      exit();
     }
-    if(fork1() == 0) {
-      close(1);
-      dup(p[1]);
-      close(p[0]);
-      close(p[1]);
-      runcmd(pcmd->left);
-    }
-    if(fork1() == 0) {
-      close(0);
-      dup(p[0]);
-      close(p[0]);
-      close(p[1]);
-      runcmd(pcmd->right);
-    }
+
+    if (fork1() == 0) {
+     close(1);
+     dup(p[1]);
+     close(p[0]);
+     close(p[1]);
+     runcmd(pcmd->left);
+   }
+
+
+   if (fork1() == 0) {
+     close(0);
+     dup(p[0]);
+     close(p[1]);
+     close(p[0]);
+     runcmd(pcmd->right);
+   }
+
+
     close(p[0]);
     close(p[1]);
-    wait();
-    wait();
 
-    printf(2, "Pipe Not implemented\n");
+    wait();
+    wait();
     break;
 
   case BACK:
