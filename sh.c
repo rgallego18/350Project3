@@ -128,17 +128,20 @@ runcmd(struct cmd *cmd)
     break;
 
   case BACK:
-  bcmd = (struct backcmd*)cmd;
-  if(fork1() == 0) {
-    runcmd(bcmd->cmd);
-  }
-  if(fork1() == 0) {
-    char *argv[] = {"sh", 0};
-    exec("sh", argv);
-  }
-  wait();
-  wait();
-    printf(2, "Backgrounding not implemented\n");
+	bcmd = (struct backcmd*)cmd;
+	if(fork1() == 0) {
+		runcmd(bcmd->cmd);
+    exit();
+	}
+	if(fork1() == 0) {
+		char *argv[] = {"sh", 0};
+		exec("sh", argv);
+	}
+	wait();	
+	wait();
+  break;
+	
+    //printf(2, "Backgrounding not implemented\n");
     break;
   }
   exit();
