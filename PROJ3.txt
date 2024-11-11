@@ -1,0 +1,18 @@
+Group members: Ryan Gallego, Priya Debnath, Ethan Bown, Shiva Ramaia
+
+Status of implementation: Everything works except test case 7. When you run hist print it deletes everything before it. We weren't able to solve the issue
+
+Ryan:
+Did Part 2
+
+
+Priya:
+Did 3.3 and 3.4
+
+
+Ethan:
+Did 3.1 and 3.2
+
+
+Shiva:
+Did 3.5
