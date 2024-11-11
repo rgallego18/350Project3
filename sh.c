@@ -1,5 +1,9 @@
 // Shell.
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stddef.h>
 #include "types.h"
 #include "user.h"
 #include "fcntl.h"
@@ -12,6 +16,7 @@
 #define BACK  5
 
 #define MAXARGS 10
+#define HISTORY_SIZE 10
 
 struct cmd {
   int type;
@@ -52,6 +57,9 @@ struct backcmd {
 int fork1(void);  // Fork but panics on failure.
 void panic(char*);
 struct cmd *parsecmd(char*);
+
+char *history[HISTORY_SIZE];
+int history_count = 0;
 
 // Execute cmd.  Never returns.
 void
@@ -134,18 +142,18 @@ runcmd(struct cmd *cmd)
     break;
 
   case BACK:
-	bcmd = (struct backcmd*)cmd;
-	if(fork1() == 0) {
-		runcmd(bcmd->cmd);
-    exit();
-	}
-	if(fork1() == 0) {
-		char *argv[] = {"sh", 0};
-		exec("sh", argv);
-	}
-	wait();	
-	wait();
-  break;
+    bcmd = (struct backcmd*)cmd;
+    if(fork1() == 0) {
+      runcmd(bcmd->cmd);
+      exit();
+    }
+    if(fork1() == 0) {
+      char *argv[] = {"sh", 0};
+      exec("sh", argv);
+    }
+    wait();	
+    wait();
+    break;
 	
     //printf(2, "Backgrounding not implemented\n");
     break;
@@ -159,8 +167,25 @@ getcmd(char *buf, int nbuf)
   printf(2, "$ ");
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
-  if(buf[0] == 0) // EOF
+  if(buf[0] == 0) 
     return -1;
+  if (strncmp(buf, "hist", 4) != 0) {
+    char *cmd_copy = strdup(buf);
+    if (cmd_copy == NULL) {
+      printf(2, "Memory allocation failed\n");
+      exit();
+    }
+    if (history_count < HISTORY_SIZE) {
+      history[history_count++] = cmd_copy; 
+    } else {
+      free(history[0]); 
+      for (int i = 1; i < HISTORY_SIZE; i++) {
+        history[i - 1] = history[i]; 
+      }
+      history[HISTORY_SIZE - 1] = cmd_copy; 
+    }
+  }
+  
   return 0;
 }
 
@@ -180,6 +205,31 @@ main(void)
 
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){
+    if (strncmp(buf, "hist", 4) == 0) {
+      char *arg = buf + 5; // Get argument after "hist "
+      while (*arg == ' ') arg++;
+      if (strncmp(arg, "print", 5) == 0) {
+    // Print the history
+        for (int i = 0; i < history_count; i++) {
+          printf(1, "Previous command %d: %s", i + 1, history[i]);
+        }
+        printf(1, "\n");
+      } else {
+    // Try to convert argument to an integer
+        int n = atoi(arg);
+        if (n > 0 && n <= history_count) {
+      // Re-execute the nth command
+            if (fork1() == 0) {
+                runcmd(parsecmd(history[n - 1]));
+                exit();
+            }
+            wait();
+        } else {
+            printf(2, "Invalid argument for hist\n");
+        }
+      }
+      continue; // Skip the rest of the loop
+    }
     if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
       // Chdir must be called by the parent, not the child.
       buf[strlen(buf)-1] = 0;  // chop \n
@@ -190,6 +240,9 @@ main(void)
     if(fork1() == 0)
       runcmd(parsecmd(buf));
     wait();
+  }
+  for (int i = 0; i < history_count; i++) {
+    free(history[i]);
   }
   exit();
 }
@@ -514,3 +567,4 @@ nulterminate(struct cmd *cmd)
   }
   return cmd;
 }
+
