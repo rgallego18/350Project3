@@ -52,6 +52,9 @@ struct backcmd {
 int fork1(void);  // Fork but panics on failure.
 void panic(char*);
 struct cmd *parsecmd(char*);
+void hist(struct execcmd * ecmd);
+char storeBuf[MAXARGS][100];
+int pos = 0;
 
 // Execute cmd.  Never returns.
 void
@@ -75,6 +78,10 @@ runcmd(struct cmd *cmd)
     ecmd = (struct execcmd*)cmd;
     if(ecmd->argv[0] == 0)
       exit();
+    if(!strcmp(ecmd->argv[0], "hist")) {
+        hist(ecmd);
+        break;
+    }
     exec(ecmd->argv[0], ecmd->argv);
     printf(2, "exec %s failed\n", ecmd->argv[0]);
     break;
@@ -134,20 +141,17 @@ runcmd(struct cmd *cmd)
     break;
 
   case BACK:
-	bcmd = (struct backcmd*)cmd;
-	if(fork1() == 0) {
-		runcmd(bcmd->cmd);
-    exit();
-	}
-	if(fork1() == 0) {
-		char *argv[] = {"sh", 0};
-		exec("sh", argv);
-	}
-	wait();	
-	wait();
-  break;
-	
-    //printf(2, "Backgrounding not implemented\n");
+	  bcmd = (struct backcmd*)cmd;
+	  if(fork1() == 0) {
+		  runcmd(bcmd->cmd);
+      exit();
+	  }
+	  if(fork1() == 0) {
+		  char *argv[] = {"sh", 0};
+		  exec("sh", argv);
+	  }
+	  wait();	
+	  wait();
     break;
   }
   exit();
@@ -169,6 +173,9 @@ main(void)
 {
   static char buf[100];
   int fd;
+  for(int i = 0; i < MAXARGS; i++) {
+    storeBuf[i][0] = '\0';
+  }
 
   // Ensure that three file descriptors are open.
   while((fd = open("console", O_RDWR)) >= 0){
@@ -187,8 +194,17 @@ main(void)
         printf(2, "cannot cd %s\n", buf+3);
       continue;
     }
+    char copy1[100], copy2[100];
+    memmove(copy1, buf, 100);
+    memmove(copy2, buf, 100);
+    struct cmd *cmd = parsecmd(copy1);
+    struct execcmd *ecmd = (struct execcmd *)cmd;
+    if(strcmp(ecmd->argv[0], "hist")) {
+      memmove(storeBuf[pos], copy2, 100);
+      pos = (pos + 1) % MAXARGS;
+    }
     if(fork1() == 0)
-      runcmd(parsecmd(buf));
+      runcmd(cmd);
     wait();
   }
   exit();
@@ -513,4 +529,32 @@ nulterminate(struct cmd *cmd)
     break;
   }
   return cmd;
+}
+
+void
+hist(struct execcmd *ecmd)
+{
+  if(strcmp(ecmd->argv[1], "print")) {
+    if(!atoi(ecmd->argv[1])) return;
+    int index = atoi(ecmd->argv[1]);
+    index = pos - index;
+    if(index < 0) index += MAXARGS;
+    char copy[100];
+    memmove(copy, storeBuf[index], 100);
+    runcmd(parsecmd(copy));
+    return;
+  }
+  int savePos = pos;
+  for(int i = 0; i < MAXARGS; i++) {
+    pos--;
+    if(pos < 0) pos += MAXARGS; 
+    if(storeBuf[pos][0] != 0) {
+      printf(2, "Previous command %d: ", i + 1);
+      printf(2, "%s", storeBuf[pos]);
+    }
+    else {
+      break;
+    }
+  }
+  pos = savePos;
 }
